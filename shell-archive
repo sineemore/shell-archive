@@ -1,0 +1,56 @@
+#!/bin/sh
+
+# shell-archive creates shell installers simular to makeself.sh
+
+if [ $# -eq 0 ]; then
+	printf 'usage: %s [tar -c arguments] < header.sh > archive.sh\n' "$(basename "$0")" >&2
+	exit 1
+fi
+
+printf '#!%s\n' "${SHEBANG:-"/bin/sh"}"
+
+cat <<'XXX'
+
+extract_archive() {
+	cat | base64 -d | gunzip | tar x
+}
+
+after_extracting() {
+	printf 'Extracted to %s\n' "$EXTRACT_DIR"
+}
+
+XXX
+
+if [ -t 0 ]; then
+	printf '# No custom header\n'
+else
+	# Write custom header from stdin
+	cat
+fi
+
+cat <<'XXX'
+
+if [ -z "$EXTRACT_DIR" ]; then
+	EXTRACT_DIR="$(mktemp -d)"
+	if [ $? -ne 0 ]; then
+		printf 'mktemp -d: failed\n' >&2
+		exit 1
+	fi
+fi
+
+(
+	cd "$EXTRACT_DIR" || {
+		printf 'cd %s: failed\n' "$EXTRACT_DIR" >&2
+		exit 1
+	}
+	cat <<'EOF' | extract_archive "$@"
+XXX
+
+tar -c "$@" | gzip | base64
+
+cat <<'XXX'
+EOF
+	
+	after_extracting "$@"
+)
+XXX
